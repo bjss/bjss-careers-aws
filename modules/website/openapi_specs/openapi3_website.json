@@ -1,0 +1,66 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "version": "1.0.0",
+    "title": "Image Uploader API",
+    "description": "Image Uploader API"
+  },
+  "x-amazon-apigateway-gateway-responses": {
+    "MISSING_AUTHENTICATION_TOKEN": {
+      "statusCode": "404"
+    }
+  },
+  "paths": {
+    "/api/url/presigned": {
+      "get": {
+        "responses": {},
+        "security": [
+          {
+            "api_key": []
+          }
+        ],
+        "x-amazon-apigateway-integration": {
+          "type": "aws_proxy",
+          "uri": "arn:aws:apigateway:eu-west-2:lambda:path/2015-03-31/functions/${TFSUB_PSU_LAMBDA_ARN}/invocations",
+          "httpMethod": "POST",
+          "passthroughBehavior": "when_no_match",
+          "timeoutInMillis": 20000,
+          "contentHandling": "CONVERT_TO_TEXT"
+        }
+      }
+    },
+    "/api/db/scan": {
+      "get": {
+        "responses": {},
+        "security": [
+          {
+            "api_key": []
+          }
+        ],
+        "x-amazon-apigateway-integration": {
+          "type": "aws_proxy",
+          "uri": "arn:aws:apigateway:eu-west-2:lambda:path/2015-03-31/functions/${TFSUB_DBSCAN_LAMBDA_ARN}/invocations",
+          "httpMethod": "POST",
+          "passthroughBehavior": "when_no_match",
+          "timeoutInMillis": 20000,
+          "contentHandling": "CONVERT_TO_TEXT"
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "Empty": {
+        "type": "object",
+        "title": "Empty Schema"
+      }
+    },
+    "securitySchemes": {
+      "api_key": {
+        "type": "apiKey",
+        "name": "x-api-key",
+        "in": "header"
+      }
+    }
+  }
+}

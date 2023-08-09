@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: imgproxy
+  labels:
+    app: imgproxy
+  annotations:
+    service.beta.kubernetes.io/aws-load-balancer-type: nlb
+    service.beta.kubernetes.io/aws-load-balancer-internal: "true"
+spec:
+  type: LoadBalancer
+  selector:
+    app: imgproxy
+  ports:
+    - port: 80
+      targetPort: 8080

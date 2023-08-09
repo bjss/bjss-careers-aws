@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<meta http-equiv="Cache-control" content="no-cache">
+<link rel="stylesheet" href="techtest.css"/>
+
+<html>
+  <head>
+    <title>Technical Test</title>
+  </head>
+
+  <body onload="displayCatalogue()">
+    <img src="bjss_logo.png" alt="bjss logo" height="100"/>
+    <h1>Technical Test (AWS, Terraform)</h1>
+    <nav>
+      <ul>
+        <li><a href="index.html">Home</a></li>
+        <li><a href="upload.html">Upload</a></li>
+        <li><a href="catalogue.html">Catalogue</a></li>
+      </ul>
+    </nav>
+    <h2>Image Catalogue</h2>
+    <table id="catalogue_table">
+      <tr>
+        <th class="leftalign">Image Name</th>
+        <th class="rightalign">Size</th>
+        <th class="centeralign">Original</th>
+        <th class="centeralign">400px</th>
+        <th class="centeralign">200px</th>
+        <th class="centeralign">100px</th>
+      </tr>
+    </table>
+    <script>
+      async function getCatalogueContents() {
+        const response = await fetch(`${window.location.origin}/api/db/scan`);
+        const catalogJson = await response.text();
+        return JSON.parse(catalogJson);
+      }
+
+      async function displayCatalogue() {
+        const table = document.getElementById('catalogue_table');
+        const catalogue = await getCatalogueContents();
+        console.log(catalogue);
+
+        catalogue.forEach(image => {
+          const row = document.createElement('tr');
+          const nameCell = document.createElement('td');
+          const nameCellText = document.createTextNode(image['image_name']);
+          nameCell.appendChild(nameCellText);
+          row.appendChild(nameCell);
+
+          const sizeCell = document.createElement('td');
+          const sizeCellText = document.createTextNode(image['size']);
+          sizeCell.setAttribute('class', 'rightalign');
+          sizeCell.appendChild(sizeCellText);
+          row.appendChild(sizeCell);
+
+          ["source", "400", "200", "100"].forEach((dimension) => {
+            let dimUrlCell = document.createElement('td');
+            if (typeof image[`url_${dimension}`] != 'undefined') {
+              dimUrlCell.setAttribute('class', 'centeralign');
+              let dimUrlCellAnchor = document.createElement('a');
+              let dimUrlCellText = document.createTextNode('link');
+              dimUrlCellAnchor.appendChild(dimUrlCellText);
+              dimUrlCellAnchor.title = image[`url_${dimension}`];
+              dimUrlCellAnchor.href = image[`url_${dimension}`];
+              dimUrlCell.appendChild(dimUrlCellAnchor);
+            }
+            row.appendChild(dimUrlCell);
+          })
+
+          table.appendChild(row);
+        })
+      }
+    </script>
+  </body>
+</html>
