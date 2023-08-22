@@ -2,6 +2,7 @@ name: Monorepo Integration Pipeline
 run-name: Monorepo Build ${{ github.ref_name }}
 
 on:
+  pull_request:
   push:
     branches:
       - public
