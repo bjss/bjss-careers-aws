@@ -1,0 +1,120 @@
+name: Monorepo Integration Pipeline
+run-name: Monorepo Build ${{ github.ref_name }}
+
+on:
+  push:
+    branches:
+      - public
+      - feature/**
+      - bugfix/**
+  workflow_dispatch:
+    inputs:
+      containerImage:
+        description: Docker image to use for running pipeline jobs
+        required: false
+        type: string
+      forceRunAllJobs:
+        description: Force Run All CI Jobs?
+        required: true
+        type: choice
+        default: No
+        options:
+          - Yes
+          - No
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash
+
+env:
+  PROJECT_NAME: techtest
+  DEFAULT_ENVIRONMENT: default
+
+jobs:
+  setup:
+    name: Repo Setup Actions
+    runs-on:
+      - self-hosted
+      - techtest
+    container: ${{ inputs.containerImage || '322411843910.dkr.ecr.eu-west-2.amazonaws.com/techtest-prd-account-terraform:latest' }}
+    outputs:
+      container_image_tf: ${{ inputs.containerImage || '322411843910.dkr.ecr.eu-west-2.amazonaws.com/techtest-prd-account-terraform:latest' }}
+      run_account_jobs: ${{ steps.detect_repo_changes.outputs.run_account_jobs }}
+      run_application_jobs: ${{ steps.detect_repo_changes.outputs.run_application_jobs }}
+      auto_deploy_account: ${{ steps.detect_auto_deploy.outputs.auto_deploy_account }}
+      auto_deploy_application: ${{ steps.detect_auto_deploy.outputs.auto_deploy_application }}
+    steps:
+      - name: Checkout Repository Code
+        uses: actions/checkout@v3
+      - name: Detect Repo Changes
+        id: detect_repo_changes
+        uses: ./.github/actions/detect_repo_changes
+        with:
+          forceRunAll: ${{ inputs.forceRunAllJobs }}
+      - name: Detect Auto Deploy
+        id: detect_auto_deploy
+        run: |-
+          echo "Repository is ${{ github.repository }}"
+          AUTO_DEPLOY=($(git log -1 --pretty=%B | sed -En 's/.*\[\sdeploy\s(.*)\s\]/\1/p'))
+          echo "${AUTO_DEPLOY[0]} ${AUTO_DEPLOY[1]}"
+          if [[ -n ${AUTO_DEPLOY[0]} ]]; then
+            # auto deploy tag was found
+            echo "auto_deploy_${AUTO_DEPLOY[0]}=${AUTO_DEPLOY[1]}"
+            echo "auto_deploy_${AUTO_DEPLOY[0]}=${AUTO_DEPLOY[1]}" >> $GITHUB_OUTPUT
+          else
+            echo "no auto deploy requested"
+          fi
+
+  account_ci:
+    name: Account CI Pipeline
+    needs:
+      - setup
+    if: needs.setup.outputs.run_account_jobs == 'true'
+    uses: ./.github/workflows/account_ci.yml
+    with:
+      container_image_tf: ${{ needs.setup.outputs.container_image_tf }}
+
+  application_ci:
+    name: Application CI Pipeline
+    needs:
+      - setup
+    if: needs.setup.outputs.run_application_jobs == 'true'
+    uses: ./.github/workflows/application_ci.yml
+    with:
+      container_image_tf: ${{ needs.setup.outputs.container_image_tf }}
+
+  account_cd:
+    name: Trigger Account Deployment
+    needs:
+      - setup
+      - account_ci
+    if: >-
+      github.ref_name == 'main' ||
+      (github.ref_name == 'public' && github.repository == 'bjss/bjss-careers-aws') ||
+      needs.setup.outputs.auto_deploy_account != ''
+    uses: ./.github/workflows/account_cd.yml
+    with:
+      container_image_tf: ${{ needs.setup.outputs.container_image_tf }}
+      deployEnvironment: ${{ github.ref_name == 'main' && 'default' || needs.setup.outputs.auto_deploy_account }}
+      terraformAction: apply
+
+  application_cd:
+    name: Trigger Application Deployment
+    needs:
+      - setup
+      - application_ci
+      - account_cd
+    if: >-
+      always() && !cancelled() && !contains(needs.*.result, 'failure') &&
+      github.ref_name == 'main' ||
+      (github.ref_name == 'public' && github.repository == 'bjss/bjss-careers-aws') ||
+      needs.setup.outputs.auto_deploy_application != ''
+    uses: ./.github/workflows/application_cd.yml
+    with:
+      container_image_tf: ${{ needs.setup.outputs.container_image_tf }}
+      deployEnvironment: ${{ github.ref_name == 'main' && 'default' || needs.setup.outputs.auto_deploy_application }}
+      terraformAction: apply

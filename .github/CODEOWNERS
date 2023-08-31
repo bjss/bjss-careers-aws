@@ -1,0 +1,11 @@
+.github/ @mtonxbjss
+account/ @mtonxbjss
+application/ @mtonxbjss
+bootstrap/ @mtonxbjss
+modules/ @mtonxbjss
+deploy/ @mtonxbjss
+test/ @mtonxbjss
+*.md @mtonxbjss
+*.drawio @mtonxbjss
+*.yml @mtonxbjss
+*.sh @mtonxbjss

@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<meta http-equiv="Cache-control" content="no-cache">
+<link rel="stylesheet" href="techtest.css"/>
+
+<html>
+  <head>
+    <title>Technical Test</title>
+  </head>
+
+  <body>
+    <img src="bjss_logo.png" alt="bjss logo" height="100"/>
+    <h1>Technical Test (AWS, Terraform)</h1>
+    <nav>
+      <ul>
+        <li><a href="index.html">Home</a></li>
+        <li><a href="upload.html">Upload</a></li>
+        <li><a href="catalogue.html">Catalogue</a></li>
+      </ul>
+    </nav>
+    <h2 for="file">Select a JPG image to upload:</h2>
+    <form>
+      <input type="file" id="file" accept=".jpg">
+      <button type="button" onclick="selectFile()">Choose File...</button>
+      <button type="button" onclick="uploadFile()">Upload</button>
+    </form>
+    <div id="selectedfile"></div>
+    <img id="preview" src="1x1.png" alt="preview of uploaded image" height="400px">
+    <div id="result"></div>
+
+
+    <script>
+      function reset() {
+        document.getElementById("result").innerHTML = ""
+        document.getElementById("preview").src = "1x1.png"
+        document.getElementById("selectedfile").innerHTML = ""
+      }
+
+      function selectFile() {
+        reset();
+        document.getElementById("file").click();
+        document.getElementById("file").addEventListener('change', showFileName);
+      }
+
+      function showFileName(event) {
+        document.getElementById("selectedfile").innerHTML = document.getElementById("file").files[0].name;
+      }
+
+      async function getPreSignedUrl(filename) {
+        const response = await fetch(`${window.location.origin}/api/url/presigned?` + new URLSearchParams({filename: filename}));
+        const psu = await response.text();
+        return psu;
+      }
+
+      async function uploadFile() {
+        reset();
+        console.log(document.getElementById("file"))
+        var file = document.getElementById("file").files[0];
+        var url = await getPreSignedUrl(file.name);
+
+        var xhr = new XMLHttpRequest();
+        xhr.open("PUT", url, true);
+        xhr.setRequestHeader('Content-Type', 'image/jpeg');
+
+        xhr.onload = () => {
+          if (xhr.status === 200) {
+            console.log('Sucessfully uploaded file')
+            document.getElementById("result").innerHTML = `Sucessfully uploaded file`
+            document.getElementById("preview").src = `${window.location.origin}/images/${file.name}`
+          }
+        };
+        xhr.onerror = () => {
+          console.log('Failed to upload file')
+          document.getElementById("result").innerHTML = "Failed to upload file"
+        };
+
+        xhr.send(file);
+      }
+    </script>
+  </body>
+</html>

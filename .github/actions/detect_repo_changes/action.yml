@@ -1,0 +1,78 @@
+name: Detect Repo Changes
+description: |
+  Determines whether there have been changes in each project folder
+
+inputs:
+  forceRunAll:
+    description: Force all jobs to run, even if no changes are detected
+    type: string
+    default: 'No'
+    required: false
+
+outputs:
+  run_account_jobs:
+    description: Indicates that account-level pipeline jobs should run
+    value: ${{ steps.set_output_values.outputs.run_account_jobs }}
+  run_application_jobs:
+    description: Indicates that application-level pipeline jobs should run
+    value: ${{ steps.set_output_values.outputs.run_application_jobs }}
+
+runs:
+  using: composite
+  steps:
+    - name: Set repo parent directory as safe
+      shell: bash
+      run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+
+    - name: Have Files Changed
+      id: filter
+      uses: dorny/paths-filter@v2
+      with:
+        list-files: 'shell'
+        filters: |
+          common:
+            - 'modules/**/*'
+            - '.github/actions/**/*'
+            - '.github/workflows/monorepo_ci.yml'
+            - '.*ignore'
+          account:
+            - 'account/**'
+          account_ci:
+            - '.github/workflows/account_ci.yml'
+            - '.github/workflows/account_cd.yml'
+          application:
+            - 'application/**/*'
+          application_ci:
+            - '.github/workflows/application_ci.yml'
+            - '.github/workflows/application_cd.yml'
+
+    - name: Set Output Values
+      id: set_output_values
+      shell: bash
+      run: |-
+        echo -e "\nOutput Values..."
+        echo "run_account_jobs=${{ steps.filter.outputs.account == 'true' || steps.filter.outputs.account_ci == 'true' || steps.filter.outputs.common == 'true' || github.ref_name == 'main' || inputs.forceRunAll == 'Yes' }}" >> $GITHUB_OUTPUT
+        echo "run_application_jobs=${{ steps.filter.outputs.application == 'true' || steps.filter.outputs.application_ci == 'true' || steps.filter.outputs.common == 'true' || github.ref_name == 'main' || inputs.forceRunAll == 'Yes' }}" >> $GITHUB_OUTPUT
+
+    - name: Confirm Outputs
+      shell: bash
+      run: |-
+        echo -e "\n$(printf "%.0s=" $(seq 1 100))"
+        echo -e "\nAll modified files detected:\n"
+        echo -e "\nCOMMON:\n$(printf "%.0s-" $(seq 1 40))"
+        sed -E 's/\s/\n/g' <<< "${{ steps.filter.outputs.common_files }}"
+
+        echo -e "\nACCOUNT:\n$(printf "%.0s-" $(seq 1 40))"
+        sed -E 's/\s/\n/g' <<< "${{ steps.filter.outputs.account_files }}"
+        echo -e "\nACCOUNT CI:\n$(printf "%.0s-" $(seq 1 40))"
+        sed -E 's/\s/\n/g' <<< "${{ steps.filter.outputs.account_ci_files }}"
+
+        echo -e "\nAPPLICATION:\n$(printf "%.0s-" $(seq 1 40))"
+        sed -E 's/\s/\n/g' <<< "${{ steps.filter.outputs.application_files }}"
+        echo -e "\nAPPLICATION CI:\n$(printf "%.0s-" $(seq 1 40))"
+        sed -E 's/\s/\n/g' <<< "${{ steps.filter.outputs.application_ci_files }}"
+
+        echo -e "Force Run All Jobs?\t\t${{ inputs.forceRunAll || 'No' }}"
+        echo -e "Run Account Jobs?\t\t${{ steps.set_output_values.outputs.run_account_jobs }}"
+        echo -e "Run Application Jobs?\t\t${{ steps.set_output_values.outputs.run_application_jobs }}"
+        echo -e "$(printf "%.0s=" $(seq 1 100))\n"

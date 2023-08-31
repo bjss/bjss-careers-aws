@@ -1,0 +1,103 @@
+name: TechTest Application Deployment Pipeline
+run-name: TechTest Application Deployment ${{ github.ref_name }}
+
+on:
+  workflow_call:
+    inputs:
+      container_image_tf:
+        required: true
+        type: string
+      deployEnvironment:
+        required: true
+        type: string
+      terraformAction:
+        default: apply
+        type: string
+  workflow_dispatch:
+    inputs:
+      container_image_tf:
+        required: true
+        type: string
+        default: "322411843910.dkr.ecr.eu-west-2.amazonaws.com/techtest-prd-account-terraform:latest"
+      deployEnvironment:
+        description: Name of the environment to deploy
+        required: true
+        default: default
+        type: string
+      terraformAction:
+        description: Apply or Destroy
+        required: true
+        default: apply
+        type: choice
+        options:
+          - apply
+          - destroy
+
+concurrency:
+  group: app-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}-${{ github.event.inputs.deployEnvironment }}
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: bash
+
+env:
+  PROJECT_NAME: techtest
+  COMPONENT: application
+
+jobs:
+  terraform_deploy:
+    name: Terraform Deploy
+    runs-on:
+      - self-hosted
+      - techtest
+    container: ${{ inputs.container_image_tf }}
+    environment: ${{ inputs.deployEnvironment }}
+    outputs:
+      new_environment: ${{ steps.terraform.outputs.new_environment }}
+      k8s_cluster_name: ${{ steps.export_terraform.outputs.k8s_cluster_name }}
+      environment: ${{ steps.export_terraform.outputs.environment }}
+      private_hosted_zone_id: ${{ steps.export_terraform.outputs.private_hosted_zone_id }}
+    steps:
+      - name: Checkout Repository Code
+        uses: actions/checkout@v3
+      - name: Terraform Apply or Destroy
+        id: terraform
+        run: |-
+          echo "${{ inputs.terraformAction }}ing environment ${{ inputs.deployEnvironment }} for ${COMPONENT}"
+          cd "${COMPONENT}/terraform"
+          terraform init --upgrade
+          ../../deploy/initialise_workspace.sh ${{ inputs.deployEnvironment }}
+          terraform ${{ inputs.terraformAction }} --auto-approve
+      - name: Export Terraform Outputs
+        id: export_terraform
+        if: ${{ inputs.terraformAction == 'apply' }}
+        run: |-
+          cd "${COMPONENT}/terraform"
+          ../../deploy/export_terraform_outputs.sh
+
+  configure_k8s:
+    name: Configure Kubernetes
+    runs-on:
+      - self-hosted
+      - techtest
+    needs:
+      - terraform_deploy
+    container: ${{ inputs.container_image_tf }}
+    if: ${{ inputs.terraformAction == 'apply' }}
+    steps:
+      - name: Checkout Repository Code
+        uses: actions/checkout@v3
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          role-to-assume: "arn:aws:iam::322411843910:role/TECHTESTAccountDeployRole"
+          aws-region: eu-west-2
+          role-skip-session-tagging: "true"
+          role-duration-seconds: 3600
+      - name: Configure Kubernetes Cluster
+        run: |-
+          cd "${COMPONENT}/k8s"
+          ./scripts/configure-kubeconfig.sh "${{ needs.terraform_deploy.outputs.k8s_cluster_name }}"
+          ./scripts/create-clusterroles.sh
+          ./scripts/create-imgproxy.sh "${{ needs.terraform_deploy.outputs.environment }}" "${{ needs.terraform_deploy.outputs.private_hosted_zone_id }}"

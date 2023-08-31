@@ -1,0 +1,59 @@
+name: TechTest Application Integration Pipeline
+run-name: TechTest Application Build ${{ github.ref_name }}
+
+on:
+  workflow_call:
+    inputs:
+      container_image_tf:
+        required: true
+        type: string
+  workflow_dispatch:
+    inputs:
+      container_image_tf:
+        required: true
+        type: string
+        default: "322411843910.dkr.ecr.eu-west-2.amazonaws.com/techtest-prd-account-terraform:latest"
+
+concurrency:
+  group: app-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash
+
+env:
+  PROJECT_NAME: techtest
+  COMPONENT: application
+  DEFAULT_ENVIRONMENT: default
+
+jobs:
+  terraform_lint:
+    name: Terraform Linting
+    runs-on:
+      - self-hosted
+      - techtest
+    container: ${{ inputs.container_image_tf }}
+    steps:
+      - name: Checkout Repository Code
+        uses: actions/checkout@v3
+      - name: Terraform Lint
+        run: ./test/terralint.sh "${COMPONENT}"
+
+  terraform_plan:
+    name: Terraform Plan
+    runs-on:
+      - self-hosted
+      - techtest
+    needs:
+      - terraform_lint
+    container: ${{ inputs.container_image_tf }}
+    steps:
+      - name: Checkout Repository Code
+        uses: actions/checkout@v3
+      - name: Terraform Plan
+        run: |-
+          echo "Planning Terraform for ${COMPONENT}"
+          cd "${COMPONENT}/terraform"
+          terraform init --upgrade
+          terraform plan -lock=false
